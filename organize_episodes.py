@@ -20,7 +20,7 @@ def organize_tv_show_episodes():
     if not target_directory:
         target_directory = "."
         
-    target_path = Path(target_directory)
+    target_path = Path(target_directory).expanduser().resolve()
     
     # Validate directory
     if not target_path.exists() or not target_path.is_dir():
