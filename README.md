@@ -46,10 +46,45 @@ Enter a URL when prompted. The resolved link will be printed and copied to your 
 
 ---
 
+### rename_c4s.py
+
+Renames video files based on Clips4sale search results.
+
+**What it does:**
+- Parses original filenames to extract a search query and resolution.
+- Uses DuckDuckGo HTML search to find the matching C4S clip ID.
+- Automatically prepends the clip ID to the filename.
+- Remembers the last used directory and search URL via `~/.rename_c4s_config.json`.
+- Safely handles duplicate files by prefixing `0Duplicate `.
+
+**Usage:**
+```bash
+python rename_c4s.py
+python rename_c4s.py --dir /path/to/videos --url "https://www..." --dry-run
+```
+
+---
+
+### find_duplicates.py
+
+Quickly finds duplicate files on network drives using partial hashing.
+
+**What it does:**
+- Instantly groups files by exact byte size.
+- Verifies duplicates by calculating an MD5 hash of only the first 1MB of data.
+- Drastically speeds up duplicate detection for large video files over a network.
+
+**Usage:**
+```bash
+python find_duplicates.py --dir /path/to/network/drive
+```
+
+---
+
 ## Requirements
 
 ```bash
-pip install requests pyperclip
+pip install requests pyperclip beautifulsoup4
 ```
 
 Or use the included virtual environment:
