@@ -81,6 +81,29 @@ python find_duplicates.py --dir /path/to/network/drive
 
 ---
 
+### remove_resolutions.py
+
+Removes resolution tags (e.g., 360p, 720p, 1080p, 2160p, 4K) from the end of filenames.
+
+**What it does:**
+- Scans a directory for files containing common resolution tags at the end of their names.
+- Renames the files to remove those tags (e.g., "Video 1080p.mp4" -> "Video.mp4").
+- Performs the actual renaming by default, with an option to do a dry-run.
+
+**Usage:**
+```bash
+# Rename files in the current directory
+python remove_resolutions.py
+
+# Rename files in a specific directory
+python remove_resolutions.py /path/to/videos
+
+# Preview changes without renaming
+python remove_resolutions.py /path/to/videos --dry-run
+```
+
+---
+
 ## Requirements
 
 ```bash
