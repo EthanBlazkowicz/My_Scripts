@@ -50,11 +50,11 @@ def organize_tv_show_episodes():
         season_pad = f"{int(season_num):02d}"
         print(f"\n{Colors.CYAN}--- Processing: {folder.name} ---{Colors.RESET}")
 
-        # Get all files within the current season folder
-        all_files = [f for f in folder.iterdir() if f.is_file()]
+        # Get all files within the current season folder (skip hidden/macOS metadata files)
+        all_files = [f for f in folder.iterdir() if f.is_file() and not f.name.startswith('.')]
         
-        # Sort files alphabetically (Mimics PowerShell's Sort-Object Name)
-        all_files.sort(key=lambda x: x.name)
+        # Sort files alphabetically, case-insensitive (Mimics PowerShell's Sort-Object Name)
+        all_files.sort(key=lambda x: x.name.lower())
 
         # Separate files by extension
         video_files = [f for f in all_files if f.suffix.lower() in video_extensions]
