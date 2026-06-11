@@ -3,11 +3,37 @@ import os
 import sys
 import shutil
 import subprocess
+import platform
 from pathlib import Path
 
-KEKA_7ZZ = ["/Applications/Keka.app/Contents/MacOS/Keka", "--ignore-file-access", "--cli", "7zz"]
 PASSWORD = "https://www.91xiezhen.top"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg", ".heic", ".heif", ".avif"}
+
+
+def detect_extractor():
+    system = platform.system()
+    if system == "Darwin":
+        keka = "/Applications/Keka.app/Contents/MacOS/Keka"
+        if os.path.exists(keka):
+            return [keka, "--ignore-file-access", "--cli", "7zz"]
+        print("Warning: Keka not found, falling back to 7z")
+    elif system == "Windows":
+        for p in [
+            r"C:\Program Files\7-Zip\7z.exe",
+            r"C:\Program Files (x86)\7-Zip\7z.exe",
+        ]:
+            if os.path.exists(p):
+                return [p]
+
+    fallback = shutil.which("7z")
+    if fallback:
+        return [fallback]
+
+    print("Error: no extractor found (Keka on macOS, 7-Zip on Windows, or 7z in PATH)")
+    sys.exit(1)
+
+
+EXTRACTOR = detect_extractor()
 
 
 def count_images(folder):
@@ -43,7 +69,7 @@ def find_inner_archive(folder):
 
 def extract(archive, output_dir):
     os.makedirs(output_dir, exist_ok=True)
-    cmd = KEKA_7ZZ + ["x", f"-p{PASSWORD}", f"-o{output_dir}", "-y", archive]
+    cmd = EXTRACTOR + ["x", f"-p{PASSWORD}", f"-o{output_dir}", "-y", archive]
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode == 0
 
@@ -98,9 +124,16 @@ def find_images_folder(folder):
     return current, os.path.basename(current)
 
 
+def cleanup_temp(parent):
+    for f in os.listdir(parent):
+        if f.endswith(".temp") and os.path.isdir(os.path.join(parent, f)):
+            shutil.rmtree(os.path.join(parent, f), ignore_errors=True)
+
+
 def process_archive(archive, output_base):
     result_dir, result_name = extract_recursive(archive)
     if result_dir is None:
+        cleanup_temp(os.path.dirname(archive))
         return False
 
     final_dir, final_name = find_images_folder(result_dir)
@@ -112,24 +145,74 @@ def process_archive(archive, output_base):
     shutil.move(final_dir, dest)
     print(f"  -> {dest}")
 
-    # Clean up all .temp dirs from this archive
-    parent = os.path.dirname(archive)
-    for f in os.listdir(parent):
-        if f.endswith(".temp") and os.path.isdir(os.path.join(parent, f)):
-            shutil.rmtree(os.path.join(parent, f), ignore_errors=True)
+    cleanup_temp(os.path.dirname(archive))
+    return True
 
+
+def process_folder(folder_path, output_base):
+    name = os.path.basename(folder_path)
+
+    inner = find_inner_archive(folder_path)
+    if inner is None:
+        print(f"No archives found in {name}")
+        return False
+
+    result_dir, result_name = extract_recursive(inner)
+    if result_dir is None:
+        cleanup_temp(folder_path)
+        return False
+
+    final_dir, final_name = find_images_folder(result_dir)
+
+    dest = os.path.join(output_base, final_name)
+    if os.path.exists(dest):
+        shutil.rmtree(dest)
+
+    shutil.move(final_dir, dest)
+    print(f"  -> {dest}")
+
+    cleanup_temp(folder_path)
     return True
 
 
 def main():
-    folder = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
-    output_dir = os.path.join(folder, "Output")
+    args = sys.argv[1:]
+
+    folder_mode = False
+    target = os.getcwd()
+
+    if "--folders" in args:
+        folder_mode = True
+        args.remove("--folders")
+
+    if args:
+        target = os.path.abspath(args[0])
+
+    output_dir = os.path.join(target, "Output")
     os.makedirs(output_dir, exist_ok=True)
 
+    if folder_mode:
+        folders = sorted(
+            f for f in os.listdir(target)
+            if os.path.isdir(os.path.join(target, f)) and not f.startswith(".") and f != "Output"
+        )
+        if not folders:
+            print("No subdirectories found.")
+            return
+        print(f"Found {len(folders)} folder(s)\n")
+        success = 0
+        for name in folders:
+            print(f"Processing folder: {name}")
+            if process_folder(os.path.join(target, name), output_dir):
+                success += 1
+            print()
+        print(f"Done: {success}/{len(folders)} extracted to Output/")
+        return
+
     archives = []
-    for f in sorted(os.listdir(folder)):
+    for f in sorted(os.listdir(target)):
         lower = f.lower()
-        full = os.path.join(folder, f)
+        full = os.path.join(target, f)
         if not os.path.isfile(full):
             continue
         if lower.endswith((".z01", ".z02", ".z03", ".z04", ".z05")):
@@ -146,7 +229,7 @@ def main():
             archives.append(full)
 
     if not archives:
-        print("No archives found.")
+        print("No archives found. Use --folders to scan subdirectories.")
         return
 
     print(f"Found {len(archives)} archive(s)\n")
