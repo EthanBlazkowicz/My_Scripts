@@ -104,6 +104,59 @@ python remove_resolutions.py /path/to/videos --dry-run
 
 ---
 
+---
+
+### decompress.py
+
+Recursively extracts split archives (`.7z.001`, `.z01`+`.zip`, `.gz`, `.rar`, etc.) until it finds the folder containing images.
+
+**What it does:**
+- Detects OS: uses Keka on macOS, 7-Zip on Windows, or `7z` from PATH as fallback.
+- Archives may be nested — an outer `.gz` might contain `.7z.001`+`.7z.002`, which in turn contains the images.
+- Extracts recursively until a folder with 2+ images is found.
+- Moves the innermost image folder into `Output/`, named after that folder (not the archive).
+- Cleans up temp `.temp` directories after each archive.
+
+**Usage:**
+```bash
+# Target archive files in current directory
+python decompress.py
+
+# Target archive files in a specific directory
+python decompress.py /path/to/files
+
+# Target subdirectories (each containing archives)
+python decompress.py --folders
+python decompress.py --folders /path/to/dirs
+```
+
+**Password:**
+The password is hardcoded in the script (`PASSWORD` variable). Update it if needed.
+
+---
+
+### rename.py
+
+Renames Xiuren-related folders into a standardized `[Xiuren秀人网]YYYY.MM.DD NO.XXXX ...` format.
+
+**What it does:**
+- Normalizes tag variants (`[XiuRen秀人网]`, `[XIUREN秀人网]`) to `[Xiuren秀人网]`.
+- Removes stray spaces after the tag and before size brackets.
+- Normalizes `No.` to `NO.`.
+- Strips XR code prefixes (e.g., `XR20200228N02016`).
+- **Pure number folders** (e.g. `2334`) — looks up the number in `~/Downloads/the_list.txt` and generates the full name.
+- **XR+number folders** (e.g. `XR1739`) — same lookup, extracts date from the entry, formats with `NO.{num}`.
+
+**Usage:**
+```bash
+python rename.py
+python rename.py /path/to/folders
+```
+
+**Lookup file:** `~/Downloads/the_list.txt` — one name per line, blank lines ignored.
+
+---
+
 ## Requirements
 
 ```bash
