@@ -92,17 +92,33 @@ def extract_recursive(archive, depth=0):
     else:
         content_dir = out_dir
 
-    img_count = count_images(content_dir)
-    if img_count >= 2:
-        print(f"{indent}  Found {img_count} images")
+    total_img = count_images(content_dir)
+    direct_img = sum(
+        1 for f in os.listdir(content_dir)
+        if os.path.isfile(os.path.join(content_dir, f))
+        and os.path.splitext(f)[1].lower() in IMAGE_EXTS
+    )
+
+    if direct_img >= 2:
+        print(f"{indent}  Found {total_img} images")
+        return content_dir, os.path.basename(content_dir)
+
+    if total_img >= 2:
+        # Images are in a subfolder — find which one
+        for entry in sorted(os.listdir(content_dir)):
+            sub = os.path.join(content_dir, entry)
+            if os.path.isdir(sub) and count_images(sub) >= 2:
+                print(f"{indent}  Found {count_images(sub)} images in {entry}")
+                return sub, entry
+        print(f"{indent}  Only {direct_img} direct images, {total_img} total")
         return content_dir, os.path.basename(content_dir)
 
     inner = find_inner_archive(content_dir)
     if inner is None:
-        print(f"{indent}  Only {img_count} images, no inner archive found")
+        print(f"{indent}  No images found, no inner archive")
         return None, None
 
-    print(f"{indent}  Found {img_count} images, extracting inner archive...")
+    print(f"{indent}  Extracting inner archive...")
     result_dir, result_name = extract_recursive(inner, depth + 1)
 
     if result_dir is not None:
