@@ -157,6 +157,32 @@ python rename.py /path/to/folders
 
 ---
 
+### shift_srt.py
+
+Shifts `.srt` subtitle timestamps by a specified offset to sync web-rip subs with blu-ray video.
+
+**What it does:**
+- Parses `.srt` timestamps in `HH:MM:SS,mmm` format.
+- Applies a positive or negative offset (in seconds, with millisecond precision).
+- Clamps negative timestamps to `00:00:00,000`.
+- Supports modifying in-place (with `.bak` backup) or writing to a new file.
+
+**Usage:**
+```bash
+# Print shifted subtitles to stdout
+python shift_srt.py input.srt 1.692
+
+# Write to a new file
+python shift_srt.py input.srt -0.500 -o output.srt
+
+# Modify in-place (creates input.srt.bak)
+python shift_srt.py input.srt 0.750 -i
+```
+
+**Offset format:** Seconds as float (e.g. `1.692`, `-0.500`, `10.0`).
+
+---
+
 ## Requirements
 
 ```bash
