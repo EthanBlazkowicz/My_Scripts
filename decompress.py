@@ -176,8 +176,35 @@ def find_media_folder(folder):
     return current, os.path.basename(current)
 
 
+def delete_archive_files(archive):
+    """Safely deletes single-file archives and sweeps entire volume sets (.001, .z01)."""
+    try:
+        dir_path = os.path.dirname(archive)
+        file_name = os.path.basename(archive)
+        lower_name = file_name.lower()
+        
+        if lower_name.endswith(".7z.001"):
+            prefix = file_name[:-4]  # Everything matching 'filename.7z.'
+            for f in os.listdir(dir_path):
+                if f.startswith(prefix) and f[len(prefix):].isdigit():
+                    os.remove(os.path.join(dir_path, f))
+        elif lower_name.endswith(".zip"):
+            prefix = file_name[:-4]  # Pure filename base
+            if os.path.exists(archive):
+                os.remove(archive)
+            for f in os.listdir(dir_path):
+                f_lower = f.lower()
+                if f_lower.startswith(prefix.lower() + ".z") and f_lower[len(prefix)+2:].isdigit():
+                    os.remove(os.path.join(dir_path, f))
+        else:
+            if os.path.exists(archive):
+                os.remove(archive)
+        safe_print(f"  Deleted source archive: {file_name}")
+    except Exception as e:
+        safe_print(f"  Warning: Could not delete source archive file(s) for {os.path.basename(archive)}: {e}")
+
+
 def handle_output_movement(final_dir, final_name, output_base):
-    """Handles the thread-safe customized routing and renaming of media assets."""
     video_files = []
     for root, _, files in os.walk(final_dir):
         for f in files:
@@ -186,10 +213,8 @@ def handle_output_movement(final_dir, final_name, output_base):
 
     with MOVE_LOCK:
         if video_files:
-            # VIDEO MODE: Extract, rename, and move only the video files
             for i, vid_path in enumerate(sorted(video_files)):
                 ext = os.path.splitext(vid_path)[1]
-                # Defensive guard: if an archive oddly contains multiple videos, give them numbered suffixes
                 suffix = f"_{i+1}" if len(video_files) > 1 else ""
                 new_vid_name = f"{final_name}{suffix}{ext}"
                 dest_vid = os.path.join(output_base, new_vid_name)
@@ -202,9 +227,7 @@ def handle_output_movement(final_dir, final_name, output_base):
                         
                 shutil.move(vid_path, dest_vid)
                 safe_print(f"  -> {dest_vid}")
-            safe_print("")
         else:
-            # IMAGE MODE (Fallback): Move the entire decompressed folder structure
             dest = os.path.join(output_base, final_name)
             if os.path.exists(dest):
                 if os.path.isdir(dest):
@@ -213,7 +236,7 @@ def handle_output_movement(final_dir, final_name, output_base):
                     os.remove(dest)
                     
             shutil.move(final_dir, dest)
-            safe_print(f"  -> {dest}\n")
+            safe_print(f"  -> {dest}")
 
 
 def process_archive(archive, output_base):
@@ -231,6 +254,10 @@ def process_archive(archive, output_base):
     
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
+        
+    # Successfully processed and moved; wipe out the source archive file(s)
+    delete_archive_files(archive)
+    safe_print("")
     return True
 
 
@@ -255,6 +282,10 @@ def process_folder(folder_path, output_base):
     
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
+        
+    # Wipe out the inner archive inside the folder now that it's uncompressed safely
+    delete_archive_files(inner)
+    safe_print("")
     return True
 
 
@@ -290,7 +321,7 @@ def main():
                 if future.result():
                     success += 1
                     
-        safe_print(f"Done: {success}/{len(folders)} extracted to Output/")
+        safe_print(f"Done: {success}/{len(folders)} processed.")
         return
 
     archives = []
@@ -325,7 +356,7 @@ def main():
             if future.result():
                 success += 1
 
-    safe_print(f"Done: {success}/{len(archives)} extracted to Output/")
+    safe_print(f"Done: {success}/{len(archives)} extracted and cleaned up.")
 
 
 if __name__ == "__main__":
