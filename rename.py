@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 
 LIST_FILE = os.path.expanduser("~/Downloads/the_list.txt")
+DATES_FILE = os.path.expanduser("~/Downloads/dates.txt")
 
 
 def load_list():
@@ -12,6 +13,23 @@ def load_list():
         return []
     with open(LIST_FILE, "r") as f:
         return [line.strip() for line in f if line.strip()]
+
+
+def load_dates_map():
+    if not os.path.exists(DATES_FILE):
+        return {}
+    dates_map = {}
+    with open(DATES_FILE, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            # Matches strings like "2020.03.06 No.1891"
+            match = re.match(r'(\d{4}\.\d{2}\.\d{2})\s+(?:No|NO)\.(\d+)', line, re.IGNORECASE)
+            if match:
+                date, num = match.groups()
+                dates_map[num] = date
+    return dates_map
 
 
 def find_entry(num, entries):
@@ -59,7 +77,48 @@ def handle_xr_folder(num, entries):
     return name
 
 
-def derive_name(name, entries):
+def derive_name(name, entries, dates_map):
+    # 1. Handle BEAUTYLEG format variations (with an existing date string)
+    bl_match = re.match(
+        r'^\[?(?:BeautyLeg|Be)(?:\s*美腿\s*(?:写真|寫真))?\]?(?:\s*美腿\s*(?:写真|寫真))?\s*(\d{4}\.\d{2}\.\d{2})\s*((?:No|NO)\.\d+)\s*(.*)$',
+        name,
+        re.IGNORECASE
+    )
+    if bl_match:
+        date = bl_match.group(1)
+        num_str = bl_match.group(2)
+        rest = bl_match.group(3).strip()
+        print(f"  BeautyLeg folder detected (with date): {name}")
+        
+        if rest:
+            rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
+            return f"[BEAUTYLEG美腿写真] {date} {num_str} {rest}"
+        return f"[BEAUTYLEG美腿写真] {date} {num_str}"
+
+    # 2. Handle BEAUTYLEG format variations (WITHOUT a date string - requires lookup)
+    bl_nodate_match = re.match(
+        r'^\[?(?:BeautyLeg|Be)(?:\s*美腿\s*(?:写真|寫真))?\]?(?:\s*美腿\s*(?:写真|寫真))?\s*((?:No|NO)\.(\d+))\s*(.*)$',
+        name,
+        re.IGNORECASE
+    )
+    if bl_nodate_match:
+        num_str = bl_nodate_match.group(1)
+        num = bl_nodate_match.group(2)
+        rest = bl_nodate_match.group(3).strip()
+        print(f"  BeautyLeg folder detected (missing date): {name}")
+        
+        # Resolve date via scraped mapping index
+        if num in dates_map:
+            date = dates_map[num]
+            if rest:
+                rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
+                return f"[BEAUTYLEG美腿写真] {date} {num_str} {rest}"
+            return f"[BEAUTYLEG美腿写真] {date} {num_str}"
+        else:
+            print(f"  Skipping: No date mapping found for issue No.{num} in dates.txt")
+            return None
+
+    # Fallback to existing Xiuren logic if not a BeautyLeg format
     if name.isdigit():
         print(f"  Pure number: {name}")
         return handle_number_folder(name, entries)
@@ -83,8 +142,12 @@ def derive_name(name, entries):
 def main():
     folder = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
     entries = load_list()
+    dates_map = load_dates_map()
+    
     if not entries:
         print(f"Warning: {LIST_FILE} is empty or not found")
+    if not dates_map:
+        print(f"Warning: {DATES_FILE} is empty or not found")
 
     folders = sorted(
         f for f in os.listdir(folder)
@@ -99,7 +162,7 @@ def main():
     renamed = 0
     for name in folders:
         src = os.path.join(folder, name)
-        new_name = derive_name(name, entries)
+        new_name = derive_name(name, entries, dates_map)
         if new_name is None or new_name == name:
             print()
             continue

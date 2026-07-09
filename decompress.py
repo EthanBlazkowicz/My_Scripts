@@ -4,10 +4,25 @@ import sys
 import shutil
 import subprocess
 import platform
+import threading
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 PASSWORD = "https://www.91xiezhen.top"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg", ".heic", ".heif", ".avif"}
+VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".3gp"}
+
+# Concurrency Configurations
+MAX_WORKERS = max(1, os.cpu_count() // 2)
+PRINT_LOCK = threading.Lock()
+MOVE_LOCK = threading.Lock()
+
+
+def safe_print(*args, **kwargs):
+    """Thread-safe print wrapper to prevent terminal output scrambling."""
+    with PRINT_LOCK:
+        print(*args, **kwargs)
 
 
 def detect_extractor():
@@ -16,7 +31,7 @@ def detect_extractor():
         keka = "/Applications/Keka.app/Contents/MacOS/Keka"
         if os.path.exists(keka):
             return [keka, "--ignore-file-access", "--cli", "7zz"]
-        print("Warning: Keka not found, falling back to 7z")
+        safe_print("Warning: Keka not found, falling back to 7z")
     elif system == "Windows":
         for p in [
             r"C:\Program Files\7-Zip\7z.exe",
@@ -29,7 +44,7 @@ def detect_extractor():
     if fallback:
         return [fallback]
 
-    print("Error: no extractor found (Keka on macOS, 7-Zip on Windows, or 7z in PATH)")
+    safe_print("Error: no extractor found (Keka on macOS, 7-Zip on Windows, or 7z in PATH)")
     sys.exit(1)
 
 
@@ -41,6 +56,15 @@ def count_images(folder):
     for _, _, files in os.walk(folder):
         for f in files:
             if os.path.splitext(f)[1].lower() in IMAGE_EXTS:
+                count += 1
+    return count
+
+
+def count_videos(folder):
+    count = 0
+    for _, _, files in os.walk(folder):
+        for f in files:
+            if os.path.splitext(f)[1].lower() in VIDEO_EXTS:
                 count += 1
     return count
 
@@ -71,19 +95,25 @@ def extract(archive, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     cmd = EXTRACTOR + ["x", f"-p{PASSWORD}", f"-o{output_dir}", "-y", archive]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    return result.returncode == 0
+    
+    if result.returncode != 0:
+        error_msg = result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
+        return False, error_msg
+    return True, ""
 
 
 def extract_recursive(archive, depth=0):
     indent = "  " * depth
-    print(f"{indent}Extracting: {os.path.basename(archive)}")
+    safe_print(f"{indent}Extracting: {os.path.basename(archive)}")
 
     out_dir = archive + ".temp"
     if os.path.exists(out_dir):
-        shutil.rmtree(out_dir)
+        shutil.rmtree(out_dir, ignore_errors=True)
 
-    if not extract(archive, out_dir):
-        print(f"{indent}  FAILED to extract")
+    success, error_details = extract(archive, out_dir)
+    if not success:
+        single_line_err = error_details.replace('\n', ' | ')[:150]
+        safe_print(f"{indent}  FAILED to extract. Reason: {single_line_err}")
         return None, None
 
     entries = [e for e in os.listdir(out_dir) if not e.startswith(".")]
@@ -93,32 +123,38 @@ def extract_recursive(archive, depth=0):
         content_dir = out_dir
 
     total_img = count_images(content_dir)
+    total_vid = count_videos(content_dir)
+
     direct_img = sum(
         1 for f in os.listdir(content_dir)
         if os.path.isfile(os.path.join(content_dir, f))
         and os.path.splitext(f)[1].lower() in IMAGE_EXTS
     )
+    direct_vid = sum(
+        1 for f in os.listdir(content_dir)
+        if os.path.isfile(os.path.join(content_dir, f))
+        and os.path.splitext(f)[1].lower() in VIDEO_EXTS
+    )
 
-    if direct_img >= 2:
-        print(f"{indent}  Found {total_img} images")
+    if direct_img >= 2 or direct_vid >= 1:
+        safe_print(f"{indent}  Found {total_img} images, {total_vid} videos")
         return content_dir, os.path.basename(content_dir)
 
-    if total_img >= 2:
-        # Images are in a subfolder — find which one
+    if total_img >= 2 or total_vid >= 1:
         for entry in sorted(os.listdir(content_dir)):
             sub = os.path.join(content_dir, entry)
-            if os.path.isdir(sub) and count_images(sub) >= 2:
-                print(f"{indent}  Found {count_images(sub)} images in {entry}")
+            if os.path.isdir(sub) and (count_images(sub) >= 2 or count_videos(sub) >= 1):
+                safe_print(f"{indent}  Found media in {entry} ({count_images(sub)} images, {count_videos(sub)} videos)")
                 return sub, entry
-        print(f"{indent}  Only {direct_img} direct images, {total_img} total")
+        safe_print(f"{indent}  Only {direct_img} direct images, {direct_vid} direct videos ({total_img} img, {total_vid} vid total)")
         return content_dir, os.path.basename(content_dir)
 
     inner = find_inner_archive(content_dir)
     if inner is None:
-        print(f"{indent}  No images found, no inner archive")
+        safe_print(f"{indent}  No media found, no inner archive")
         return None, None
 
-    print(f"{indent}  Extracting inner archive...")
+    safe_print(f"{indent}  Extracting inner archive...")
     result_dir, result_name = extract_recursive(inner, depth + 1)
 
     if result_dir is not None:
@@ -127,73 +163,103 @@ def extract_recursive(archive, depth=0):
     return None, None
 
 
-def find_images_folder(folder):
+def find_media_folder(folder):
     current = folder
     while True:
         entries = [e for e in os.listdir(current) if not e.startswith(".")]
         if len(entries) == 1:
             candidate = os.path.join(current, entries[0])
-            if os.path.isdir(candidate) and count_images(candidate) >= 2:
+            if os.path.isdir(candidate) and (count_images(candidate) >= 2 or count_videos(candidate) >= 1):
                 current = candidate
                 continue
         break
     return current, os.path.basename(current)
 
 
-def cleanup_temp(parent):
-    for f in os.listdir(parent):
-        if f.endswith(".temp") and os.path.isdir(os.path.join(parent, f)):
-            shutil.rmtree(os.path.join(parent, f), ignore_errors=True)
+def handle_output_movement(final_dir, final_name, output_base):
+    """Handles the thread-safe customized routing and renaming of media assets."""
+    video_files = []
+    for root, _, files in os.walk(final_dir):
+        for f in files:
+            if os.path.splitext(f)[1].lower() in VIDEO_EXTS:
+                video_files.append(os.path.join(root, f))
+
+    with MOVE_LOCK:
+        if video_files:
+            # VIDEO MODE: Extract, rename, and move only the video files
+            for i, vid_path in enumerate(sorted(video_files)):
+                ext = os.path.splitext(vid_path)[1]
+                # Defensive guard: if an archive oddly contains multiple videos, give them numbered suffixes
+                suffix = f"_{i+1}" if len(video_files) > 1 else ""
+                new_vid_name = f"{final_name}{suffix}{ext}"
+                dest_vid = os.path.join(output_base, new_vid_name)
+                
+                if os.path.exists(dest_vid):
+                    if os.path.isdir(dest_vid):
+                        shutil.rmtree(dest_vid)
+                    else:
+                        os.remove(dest_vid)
+                        
+                shutil.move(vid_path, dest_vid)
+                safe_print(f"  -> {dest_vid}")
+            safe_print("")
+        else:
+            # IMAGE MODE (Fallback): Move the entire decompressed folder structure
+            dest = os.path.join(output_base, final_name)
+            if os.path.exists(dest):
+                if os.path.isdir(dest):
+                    shutil.rmtree(dest)
+                else:
+                    os.remove(dest)
+                    
+            shutil.move(final_dir, dest)
+            safe_print(f"  -> {dest}\n")
 
 
 def process_archive(archive, output_base):
+    safe_print(f"Processing archive: {os.path.basename(archive)}")
+    temp_dir = archive + ".temp"
+    
     result_dir, result_name = extract_recursive(archive)
     if result_dir is None:
-        cleanup_temp(os.path.dirname(archive))
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
         return False
 
-    final_dir, final_name = find_images_folder(result_dir)
-
-    dest = os.path.join(output_base, final_name)
-    if os.path.exists(dest):
-        shutil.rmtree(dest)
-
-    shutil.move(final_dir, dest)
-    print(f"  -> {dest}")
-
-    cleanup_temp(os.path.dirname(archive))
+    final_dir, final_name = find_media_folder(result_dir)
+    handle_output_movement(final_dir, final_name, output_base)
+    
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir, ignore_errors=True)
     return True
 
 
 def process_folder(folder_path, output_base):
     name = os.path.basename(folder_path)
+    safe_print(f"Processing folder: {name}")
 
     inner = find_inner_archive(folder_path)
     if inner is None:
-        print(f"No archives found in {name}")
+        safe_print(f"No archives found in {name}\n")
         return False
 
+    temp_dir = inner + ".temp"
     result_dir, result_name = extract_recursive(inner)
     if result_dir is None:
-        cleanup_temp(folder_path)
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir, ignore_errors=True)
         return False
 
-    final_dir, final_name = find_images_folder(result_dir)
-
-    dest = os.path.join(output_base, final_name)
-    if os.path.exists(dest):
-        shutil.rmtree(dest)
-
-    shutil.move(final_dir, dest)
-    print(f"  -> {dest}")
-
-    cleanup_temp(folder_path)
+    final_dir, final_name = find_media_folder(result_dir)
+    handle_output_movement(final_dir, final_name, output_base)
+    
+    if os.path.exists(temp_dir):
+        shutil.rmtree(temp_dir, ignore_errors=True)
     return True
 
 
 def main():
     args = sys.argv[1:]
-
     folder_mode = False
     target = os.getcwd()
 
@@ -213,16 +279,18 @@ def main():
             if os.path.isdir(os.path.join(target, f)) and not f.startswith(".") and f != "Output"
         )
         if not folders:
-            print("No subdirectories found.")
+            safe_print("No subdirectories found.")
             return
-        print(f"Found {len(folders)} folder(s)\n")
+        safe_print(f"Found {len(folders)} folder(s) | Running with {MAX_WORKERS} workers.\n")
+        
         success = 0
-        for name in folders:
-            print(f"Processing folder: {name}")
-            if process_folder(os.path.join(target, name), output_dir):
-                success += 1
-            print()
-        print(f"Done: {success}/{len(folders)} extracted to Output/")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [executor.submit(process_folder, os.path.join(target, name), output_dir) for name in folders]
+            for future in concurrent.futures.as_completed(futures):
+                if future.result():
+                    success += 1
+                    
+        safe_print(f"Done: {success}/{len(folders)} extracted to Output/")
         return
 
     archives = []
@@ -245,17 +313,19 @@ def main():
             archives.append(full)
 
     if not archives:
-        print("No archives found. Use --folders to scan subdirectories.")
+        safe_print("No archives found. Use --folders to scan subdirectories.")
         return
 
-    print(f"Found {len(archives)} archive(s)\n")
+    safe_print(f"Found {len(archives)} archive(s) | Running with {MAX_WORKERS} workers.\n")
+    
     success = 0
-    for arch in archives:
-        if process_archive(arch, output_dir):
-            success += 1
-        print()
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+        futures = [executor.submit(process_archive, arch, output_dir) for arch in archives]
+        for future in concurrent.futures.as_completed(futures):
+            if future.result():
+                success += 1
 
-    print(f"Done: {success}/{len(archives)} extracted to Output/")
+    safe_print(f"Done: {success}/{len(archives)} extracted to Output/")
 
 
 if __name__ == "__main__":
