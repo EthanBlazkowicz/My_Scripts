@@ -2,10 +2,14 @@
 import os
 import sys
 import re
+import argparse
 from pathlib import Path
 
 LIST_FILE = os.path.expanduser("~/Downloads/the_list.txt")
 DATES_FILE = os.path.expanduser("~/Downloads/dates.txt")
+
+# Video extensions to process when running in video mode
+VIDEO_EXTENSIONS = {'.mp4', '.mkv', '.avi', '.rmvb', '.wmv', '.mov', '.flv'}
 
 
 def load_list():
@@ -24,11 +28,11 @@ def load_dates_map():
             line = line.strip()
             if not line:
                 continue
-            # Matches strings like "2020.03.06 No.1891"
             match = re.match(r'(\d{4}\.\d{2}\.\d{2})\s+(?:No|NO)\.(\d+)', line, re.IGNORECASE)
             if match:
                 date, num = match.groups()
-                dates_map[num] = date
+                # Store by standardized integer string key for easier cross-lookup
+                dates_map[str(int(num))] = date
     return dates_map
 
 
@@ -46,7 +50,6 @@ def clean_new_name(name):
     name = re.sub(r'\[Xiuren秀人网\]\s+', '[Xiuren秀人网]', name)
     name = re.sub(r'\bNo\.', 'NO.', name)
     name = re.sub(r'\s+(\[)', r'\1', name)
-    # Replace regular slash with full-width slash inside brackets (macOS compat)
     name = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', name)
     return name
 
@@ -63,22 +66,19 @@ def handle_xr_folder(num, entries):
 
     name = clean_new_name(entry)
 
-    # If it already has NO.{num} after the date, it's already in target format
     if re.search(r'\d{4}\.\d{2}\.\d{2} NO\.' + num + r'\b', name):
         return name
 
-    # If it has XR code, remove it and insert NO.{num} after date
     if re.search(r'XR\d+N\d+\s+', name):
         name = re.sub(r'XR\d+N\d+\s+', '', name)
         name = re.sub(r'(\d{4}\.\d{2}\.\d{2})', rf'\1 NO.{num}', name)
         return clean_new_name(name)
 
-    # Otherwise just return the cleaned entry
     return name
 
 
 def derive_name(name, entries, dates_map):
-    # 1. Handle BEAUTYLEG format variations (with an existing date string)
+    # Handle BEAUTYLEG folder format variations
     bl_match = re.match(
         r'^\[?(?:BeautyLeg|Be)(?:\s*美腿\s*(?:写真|寫真))?\]?(?:\s*美腿\s*(?:写真|寫真))?\s*(\d{4}\.\d{2}\.\d{2})\s*((?:No|NO)\.\d+)\s*(.*)$',
         name,
@@ -95,7 +95,7 @@ def derive_name(name, entries, dates_map):
             return f"[BEAUTYLEG美腿写真] {date} {num_str} {rest}"
         return f"[BEAUTYLEG美腿写真] {date} {num_str}"
 
-    # 2. Handle BEAUTYLEG format variations (WITHOUT a date string - requires lookup)
+    # Handle BEAUTYLEG folder format variations (WITHOUT a date string)
     bl_nodate_match = re.match(
         r'^\[?(?:BeautyLeg|Be)(?:\s*美腿\s*(?:写真|寫真))?\]?(?:\s*美腿\s*(?:写真|寫真))?\s*((?:No|NO)\.(\d+))\s*(.*)$',
         name,
@@ -107,9 +107,9 @@ def derive_name(name, entries, dates_map):
         rest = bl_nodate_match.group(3).strip()
         print(f"  BeautyLeg folder detected (missing date): {name}")
         
-        # Resolve date via scraped mapping index
-        if num in dates_map:
-            date = dates_map[num]
+        raw_num_key = str(int(num))
+        if raw_num_key in dates_map:
+            date = dates_map[raw_num_key]
             if rest:
                 rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
                 return f"[BEAUTYLEG美腿写真] {date} {num_str} {rest}"
@@ -118,7 +118,6 @@ def derive_name(name, entries, dates_map):
             print(f"  Skipping: No date mapping found for issue No.{num} in dates.txt")
             return None
 
-    # Fallback to existing Xiuren logic if not a BeautyLeg format
     if name.isdigit():
         print(f"  Pure number: {name}")
         return handle_number_folder(name, entries)
@@ -131,7 +130,6 @@ def derive_name(name, entries, dates_map):
     if re.match(r'\[(?:Xiuren|XiuRen|XIUREN)秀人网\]', name):
         print(f"  Tagged folder: {name}")
         new_name = clean_new_name(name)
-        # Remove XR code prefix if present
         new_name = re.sub(r'\[Xiuren秀人网\]XR\d+N\d+\s+', '[Xiuren秀人网]', new_name)
         return new_name
 
@@ -139,8 +137,53 @@ def derive_name(name, entries, dates_map):
     return None
 
 
+def derive_video_name(filename, dates_map):
+    base, ext = os.path.splitext(filename)
+    
+    # 1. Match when filename already contains the date explicitly
+    # Captures Date, then prefixes like No, NO, N0, or HD followed by digits, and trailing text
+    match = re.search(r'(\d{4}\.\d{2}\.\d{2})\s*(?:(?:No|NO|N0|HD)\.?\s*(\d+))\s*(.*)$', base, re.IGNORECASE)
+    if match:
+        date = match.group(1)
+        num = match.group(2)
+        rest = match.group(3).strip()
+        
+        # Standardize numbering syntax (Pads numbers under 1000 to 3 digits; e.g., 63 -> 063)
+        val = int(num)
+        num_str = f"{val:03d}" if val < 1000 else str(val)
+        
+        if rest:
+            rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
+            return f"[Beautyleg] {date} No.{num_str} {rest}{ext}"
+        return f"[Beautyleg] {date} No.{num_str}{ext}"
+
+    # 2. Match when filename has NO date (e.g., "[Beautyleg] No.1629 Lucy") -> Pull from dates.txt
+    nodate_match = re.search(r'(?:No|NO|N0|HD)\.?\s*(\d+)\s*(.*)$', base, re.IGNORECASE)
+    if nodate_match:
+        num = nodate_match.group(1)
+        rest = nodate_match.group(2).strip()
+        
+        raw_num_key = str(int(num))
+        if raw_num_key in dates_map:
+            date = dates_map[raw_num_key]
+            val = int(num)
+            num_str = f"{val:03d}" if val < 1000 else str(val)
+            
+            if rest:
+                rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
+                return f"[Beautyleg] {date} No.{num_str} {rest}{ext}"
+            return f"[Beautyleg] {date} No.{num_str}{ext}"
+            
+    return None
+
+
 def main():
-    folder = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
+    parser = argparse.ArgumentParser(description="Rename photo collection directories and video assets.")
+    parser.add_argument("path", nargs="?", default=os.getcwd(), help="Target operating path directory")
+    parser.add_argument("-v", "--videos", action="store_true", help="Process and rename video files instead of directories")
+    args = parser.parse_args()
+
+    folder = os.path.abspath(args.path)
     entries = load_list()
     dates_map = load_dates_map()
     
@@ -149,32 +192,48 @@ def main():
     if not dates_map:
         print(f"Warning: {DATES_FILE} is empty or not found")
 
-    folders = sorted(
-        f for f in os.listdir(folder)
-        if os.path.isdir(os.path.join(folder, f)) and not f.startswith(".") and f != "Output"
-    )
+    # Filter items depending on directory vs video mode selection
+    if args.videos:
+        items = sorted(
+            f for f in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, f)) and os.path.splitext(f)[1].lower() in VIDEO_EXTENSIONS
+        )
+        mode_label = "video file(s)"
+    else:
+        items = sorted(
+            f for f in os.listdir(folder)
+            if os.path.isdir(os.path.join(folder, f)) and not f.startswith(".") and f != "Output"
+        )
+        mode_label = "folder(s)"
 
-    if not folders:
-        print("No subdirectories found.")
+    if not items:
+        print(f"No matchable {mode_label} found.")
         return
 
-    print(f"Found {len(folders)} folder(s)\n")
+    print(f"Found {len(items)} {mode_label}\n")
     renamed = 0
-    for name in folders:
+    
+    for name in items:
         src = os.path.join(folder, name)
-        new_name = derive_name(name, entries, dates_map)
+        
+        if args.videos:
+            new_name = derive_video_name(name, dates_map)
+        else:
+            new_name = derive_name(name, entries, dates_map)
+            
         if new_name is None or new_name == name:
-            print()
             continue
+            
         dst = os.path.join(folder, new_name)
         if os.path.exists(dst):
             print(f"  Target already exists, skipping: {new_name}\n")
             continue
+            
         os.rename(src, dst)
         print(f"  Renamed: {name}\n      -> {new_name}\n")
         renamed += 1
 
-    print(f"Done: {renamed}/{len(folders)} renamed")
+    print(f"Done: {renamed}/{len(items)} renamed")
 
 
 if __name__ == "__main__":
