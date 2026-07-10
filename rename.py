@@ -23,16 +23,23 @@ def load_dates_map():
     if not os.path.exists(DATES_FILE):
         return {}
     dates_map = {}
-    with open(DATES_FILE, "r") as f:
+    with open(DATES_FILE, "r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            match = re.match(r'(\d{4}\.\d{2}\.\d{2})\s+(?:No|NO)\.(\d+)', line, re.IGNORECASE)
+            # Parse raw complex scraped lines from dates.txt
+            # Captures: 1. Date, 2. Issue prefix (No/HD), 3. Issue Number, 4. Trailing metadata
+            match = re.search(r'(\d{4}[.-]\d{1,2}[.-]\d{1,2}).*?\b(No|NO|N0|HD)\.?\s*(\d+)\s*(.*)$', line, re.IGNORECASE)
             if match:
-                date, num = match.groups()
-                # Store by standardized integer string key for easier cross-lookup
-                dates_map[str(int(num))] = date
+                date_str, _, num_digits, rest = match.groups()
+                # Normalize hyphen dates to dots for map consistency
+                date_str = date_str.replace('-', '.')
+                num_key = str(int(num_digits))
+                dates_map[num_key] = {
+                    "date": date_str,
+                    "rest": rest.strip()
+                }
     return dates_map
 
 
@@ -109,7 +116,7 @@ def derive_name(name, entries, dates_map):
         
         raw_num_key = str(int(num))
         if raw_num_key in dates_map:
-            date = dates_map[raw_num_key]
+            date = dates_map[raw_num_key]["date"]
             if rest:
                 rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
                 return f"[BEAUTYLEG美腿写真] {date} {num_str} {rest}"
@@ -140,39 +147,62 @@ def derive_name(name, entries, dates_map):
 def derive_video_name(filename, dates_map):
     base, ext = os.path.splitext(filename)
     
-    # 1. Match when filename already contains the date explicitly
-    # Captures Date, then prefixes like No, NO, N0, or HD followed by digits, and trailing text
-    match = re.search(r'(\d{4}\.\d{2}\.\d{2})\s*(?:(?:No|NO|N0|HD)\.?\s*(\d+))\s*(.*)$', base, re.IGNORECASE)
+    # 1. Match when filename contains a date explicitly anywhere
+    match = re.search(r'(\d{4})[.-](\d{1,2})[.-](\d{1,2}).*?\b(No|NO|N0|HD)\.?\s*(\d+)\s*(.*)$', base, re.IGNORECASE)
     if match:
-        date = match.group(1)
-        num = match.group(2)
-        rest = match.group(3).strip()
+        year, month, day, num_prefix, num_digits, rest = match.groups()
+        date_str = f"{year}.{month}.{day}"
+        rest = rest.strip()
         
-        # Standardize numbering syntax (Pads numbers under 1000 to 3 digits; e.g., 63 -> 063)
-        val = int(num)
-        num_str = f"{val:03d}" if val < 1000 else str(val)
+        if num_prefix.upper() == 'HD' and len(num_digits) == 4 and num_digits.startswith('0'):
+            num_str = num_digits[1:]
+        else:
+            num_str = num_digits
         
         if rest:
             rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
-            return f"[Beautyleg] {date} No.{num_str} {rest}{ext}"
-        return f"[Beautyleg] {date} No.{num_str}{ext}"
+            return f"[Beautyleg] {date_str} No.{num_str} {rest}{ext}"
+        return f"[Beautyleg] {date_str} No.{num_str}{ext}"
 
-    # 2. Match when filename has NO date (e.g., "[Beautyleg] No.1629 Lucy") -> Pull from dates.txt
-    nodate_match = re.search(r'(?:No|NO|N0|HD)\.?\s*(\d+)\s*(.*)$', base, re.IGNORECASE)
+    # 2. Match when filename has NO date, but has an explicit prefix tag (e.g., "No.1629 Lucy")
+    nodate_match = re.search(r'\b(No|NO|N0|HD)\.?\s*(\d+)\s*(.*)$', base, re.IGNORECASE)
     if nodate_match:
-        num = nodate_match.group(1)
-        rest = nodate_match.group(2).strip()
+        num_prefix, num_digits, rest = nodate_match.groups()
+        rest = rest.strip()
         
-        raw_num_key = str(int(num))
+        raw_num_key = str(int(num_digits))
         if raw_num_key in dates_map:
-            date = dates_map[raw_num_key]
-            val = int(num)
+            date_str = dates_map[raw_num_key]["date"]
+            # Fallback to text inside map if the filename doesn't provide contextual text
+            final_rest = rest if rest else dates_map[raw_num_key]["rest"]
+            
+            if num_prefix.upper() == 'HD' and len(num_digits) == 4 and num_digits.startswith('0'):
+                num_str = num_digits[1:]
+            else:
+                num_str = num_digits
+                
+            if final_rest:
+                final_rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', final_rest)
+                return f"[Beautyleg] {date_str} No.{num_str} {final_rest}{ext}"
+            return f"[Beautyleg] {date_str} No.{num_str}{ext}"
+
+    # 3. Match when filename is a bare/scrambled number layout (e.g., "1201.gz.temp")
+    bare_num_match = re.match(r'^(\d+)', base)
+    if bare_num_match:
+        num_digits = bare_num_match.group(1)
+        raw_num_key = str(int(num_digits))
+        
+        if raw_num_key in dates_map:
+            date_str = dates_map[raw_num_key]["date"]
+            rest = dates_map[raw_num_key]["rest"]
+            
+            val = int(num_digits)
             num_str = f"{val:03d}" if val < 1000 else str(val)
             
             if rest:
                 rest = re.sub(r'\[([^\]]*)/([^\]]*)\]', r'[\1／\2]', rest)
-                return f"[Beautyleg] {date} No.{num_str} {rest}{ext}"
-            return f"[Beautyleg] {date} No.{num_str}{ext}"
+                return f"[Beautyleg] {date_str} No.{num_str} {rest}{ext}"
+            return f"[Beautyleg] {date_str} No.{num_str}{ext}"
             
     return None
 
@@ -192,7 +222,6 @@ def main():
     if not dates_map:
         print(f"Warning: {DATES_FILE} is empty or not found")
 
-    # Filter items depending on directory vs video mode selection
     if args.videos:
         items = sorted(
             f for f in os.listdir(folder)
