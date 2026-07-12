@@ -54,7 +54,7 @@ def organize_tv_show_episodes():
         all_files = [f for f in folder.iterdir() if f.is_file() and not f.name.startswith('.')]
         
         # Sort files alphabetically, case-insensitive (Mimics PowerShell's Sort-Object Name)
-        all_files.sort(key=lambda x: x.name.lower())
+        all_files.sort(key=lambda x: [int(c) if c.isdigit() else c for c in re.split(r'(\d+)', x.name.lower())])
 
         # Separate files by extension
         video_files = [f for f in all_files if f.suffix.lower() in video_extensions]

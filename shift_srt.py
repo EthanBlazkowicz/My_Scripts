@@ -127,7 +127,10 @@ def batch_mode(folder, offset_file):
         print(f"Error: invalid offset in {offset_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
-    srt_files = sorted(f for f in os.listdir(folder) if f.lower().endswith(".srt"))
+    srt_files = sorted(
+        (f for f in os.listdir(folder) if f.lower().endswith(".srt")),
+        key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
+    )
 
     if len(offsets) < len(srt_files):
         print(
