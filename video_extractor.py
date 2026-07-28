@@ -6,7 +6,19 @@ import threading
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor
 
-VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".3gp"}
+VIDEO_EXTS = {
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".flv",
+    ".wmv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    ".3gp",
+}
 
 # Concurrency Configurations
 MAX_WORKERS = max(1, os.cpu_count() // 2)
@@ -54,7 +66,7 @@ def process_folder(folder_path, output_base):
 
             shutil.move(vid_path, dest_vid)
             safe_print(f"  -> {dest_vid}")
-            
+
     return True
 
 
@@ -70,9 +82,10 @@ def main():
 
     # Gather all subdirectories, ignoring hidden ones and the Output folder itself
     folders = sorted(
-        f for f in os.listdir(target)
-        if os.path.isdir(os.path.join(target, f)) 
-        and not f.startswith(".") 
+        f
+        for f in os.listdir(target)
+        if os.path.isdir(os.path.join(target, f))
+        and not f.startswith(".")
         and f != "Output"
     )
 
@@ -80,18 +93,25 @@ def main():
         safe_print("No subdirectories found to scan.")
         return
 
-    safe_print(f"Found {len(folders)} folder(s) to scan | Running with {MAX_WORKERS} workers.\n")
+    safe_print(
+        f"Found {len(folders)} folder(s) to scan | Running with {MAX_WORKERS} workers.\n"
+    )
 
     success = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         # Submit all folder scanning tasks to the thread pool
-        futures = [executor.submit(process_folder, os.path.join(target, name), output_dir) for name in folders]
-        
+        futures = [
+            executor.submit(process_folder, os.path.join(target, name), output_dir)
+            for name in folders
+        ]
+
         for future in concurrent.futures.as_completed(futures):
             if future.result():
                 success += 1
 
-    safe_print(f"\nDone: Extracted videos from {success}/{len(folders)} folders into Output/")
+    safe_print(
+        f"\nDone: Extracted videos from {success}/{len(folders)} folders into Output/"
+    )
 
 
 if __name__ == "__main__":

@@ -3,11 +3,11 @@ import sys
 import os
 import argparse
 
-SRT_TIMESTAMP = re.compile(r'(\d{2}):(\d{2}):(\d{2})[,.](\d{3})')
+SRT_TIMESTAMP = re.compile(r"(\d{2}):(\d{2}):(\d{2})[,.](\d{3})")
 SRT_BLOCK = re.compile(
-    r'(\d+\s*\n'
-    r'\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}'
-    r'.*?)(?=\n\n|\Z)',
+    r"(\d+\s*\n"
+    r"\d{2}:\d{2}:\d{2}[,.]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[,.]\d{3}"
+    r".*?)(?=\n\n|\Z)",
     re.DOTALL,
 )
 
@@ -129,7 +129,9 @@ def batch_mode(folder, offset_file):
 
     srt_files = sorted(
         (f for f in os.listdir(folder) if f.lower().endswith(".srt")),
-        key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s)]
+        key=lambda s: [
+            int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)
+        ],
     )
 
     if len(offsets) < len(srt_files):
@@ -149,7 +151,9 @@ def main():
         description="Shift .srt subtitle timestamps by a time offset."
     )
     parser.add_argument("input", nargs="?", help="Input .srt file")
-    parser.add_argument("offset", nargs="?", type=float, help="Offset in seconds (e.g. 1.692, -0.500)")
+    parser.add_argument(
+        "offset", nargs="?", type=float, help="Offset in seconds (e.g. 1.692, -0.500)"
+    )
     parser.add_argument("-o", "--output", help="Output file (default: print to stdout)")
     parser.add_argument(
         "-i",

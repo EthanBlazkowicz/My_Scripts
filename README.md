@@ -9,20 +9,24 @@ A collection of standalone Python scripts for everyday automation tasks.
 Renames TV show episode files in a standardized format.
 
 **What it does:**
+
 - Processes folders named `Season 1`, `Season 2`, etc.
 - Renames video files and subtitles to `{ShowTitle} S01E001.mkv` format
 - Deletes unwanted files (`.txt`, `.nfo`, `.jpg`, etc.)
 
 **Usage:**
+
 ```bash
 python organize_episodes.py
 ```
 
 You'll be prompted for:
+
 1. Show title (used in the renamed files)
 2. Target directory (or press Enter for current directory)
 
 **Supported formats:**
+
 - Videos: `.mkv`, `.mp4`, `.avi`, `.mov`, `.wmv`, `.m4v`
 - Subtitles: `.srt`, `.ass`, `.vtt`, `.sub`, `.ssa`
 
@@ -33,11 +37,13 @@ You'll be prompted for:
 Extracts direct download links from URLs that redirect.
 
 **What it does:**
+
 - Sends a HEAD request to the URL
 - Captures the redirect location from 3xx responses
 - Copies the direct link to your clipboard
 
 **Usage:**
+
 ```bash
 python get_real_link.py
 ```
@@ -51,6 +57,7 @@ Enter a URL when prompted. The resolved link will be printed and copied to your 
 Renames video files based on Clips4sale search results.
 
 **What it does:**
+
 - Parses original filenames to extract a search query and resolution.
 - Uses DuckDuckGo HTML search to find the matching C4S clip ID.
 - Automatically prepends the clip ID to the filename.
@@ -58,6 +65,7 @@ Renames video files based on Clips4sale search results.
 - Safely handles duplicate files by prefixing `0Duplicate `.
 
 **Usage:**
+
 ```bash
 python rename_c4s.py
 python rename_c4s.py --dir /path/to/videos --url "https://www..." --dry-run
@@ -70,11 +78,13 @@ python rename_c4s.py --dir /path/to/videos --url "https://www..." --dry-run
 Quickly finds duplicate files on network drives using partial hashing.
 
 **What it does:**
+
 - Instantly groups files by exact byte size.
 - Verifies duplicates by calculating an MD5 hash of only the first 1MB of data.
 - Drastically speeds up duplicate detection for large video files over a network.
 
 **Usage:**
+
 ```bash
 python find_duplicates.py --dir /path/to/network/drive
 ```
@@ -86,11 +96,13 @@ python find_duplicates.py --dir /path/to/network/drive
 Removes resolution tags (e.g., 360p, 720p, 1080p, 2160p, 4K) from the end of filenames.
 
 **What it does:**
+
 - Scans a directory for files containing common resolution tags at the end of their names.
 - Renames the files to remove those tags (e.g., "Video 1080p.mp4" -> "Video.mp4").
 - Performs the actual renaming by default, with an option to do a dry-run.
 
 **Usage:**
+
 ```bash
 # Rename files in the current directory
 python remove_resolutions.py
@@ -111,6 +123,7 @@ python remove_resolutions.py /path/to/videos --dry-run
 Recursively extracts split archives (`.7z.001`, `.z01`+`.zip`, `.gz`, `.rar`, etc.) until it finds the folder containing images.
 
 **What it does:**
+
 - Detects OS: uses Keka on macOS, 7-Zip on Windows, or `7z` from PATH as fallback.
 - Archives may be nested — an outer `.gz` might contain `.7z.001`+`.7z.002`, which in turn contains the images.
 - Extracts recursively until a folder with 2+ images is found.
@@ -118,6 +131,7 @@ Recursively extracts split archives (`.7z.001`, `.z01`+`.zip`, `.gz`, `.rar`, et
 - Cleans up temp `.temp` directories after each archive.
 
 **Usage:**
+
 ```bash
 # Target archive files in current directory
 python decompress.py
@@ -140,6 +154,7 @@ The password is hardcoded in the script (`PASSWORD` variable). Update it if need
 Renames Xiuren-related folders into a standardized `[Xiuren秀人网]YYYY.MM.DD NO.XXXX ...` format.
 
 **What it does:**
+
 - Normalizes tag variants (`[XiuRen秀人网]`, `[XIUREN秀人网]`) to `[Xiuren秀人网]`.
 - Removes stray spaces after the tag and before size brackets.
 - Normalizes `No.` to `NO.`.
@@ -148,6 +163,7 @@ Renames Xiuren-related folders into a standardized `[Xiuren秀人网]YYYY.MM.DD 
 - **XR+number folders** (e.g. `XR1739`) — same lookup, extracts date from the entry, formats with `NO.{num}`.
 
 **Usage:**
+
 ```bash
 python rename.py
 python rename.py /path/to/folders
@@ -162,12 +178,14 @@ python rename.py /path/to/folders
 Shifts `.srt` subtitle timestamps by a specified offset to sync web-rip subs with blu-ray video.
 
 **What it does:**
+
 - Parses `.srt` timestamps in `HH:MM:SS,mmm` format.
 - Applies a positive or negative offset (in seconds, with millisecond precision).
 - Clamps negative timestamps to `00:00:00,000`.
 - Supports modifying in-place (with `.bak` backup) or writing to a new file.
 
 **Usage:**
+
 ```bash
 # Print shifted subtitles to stdout
 python shift_srt.py input.srt 1.692
@@ -190,6 +208,7 @@ pip install requests pyperclip beautifulsoup4
 ```
 
 Or use the included virtual environment:
+
 ```bash
 .venv\Scripts\activate
 ```

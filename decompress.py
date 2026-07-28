@@ -10,8 +10,33 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 PASSWORD = "https://www.91xiezhen.top"
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff", ".tif", ".svg", ".heic", ".heif", ".avif"}
-VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".3gp"}
+IMAGE_EXTS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".bmp",
+    ".webp",
+    ".tiff",
+    ".tif",
+    ".svg",
+    ".heic",
+    ".heif",
+    ".avif",
+}
+VIDEO_EXTS = {
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".flv",
+    ".wmv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    ".3gp",
+}
 
 # Concurrency Configurations
 MAX_WORKERS = max(1, os.cpu_count() // 2)
@@ -44,7 +69,9 @@ def detect_extractor():
     if fallback:
         return [fallback]
 
-    safe_print("Error: no extractor found (Keka on macOS, 7-Zip on Windows, or 7z in PATH)")
+    safe_print(
+        "Error: no extractor found (Keka on macOS, 7-Zip on Windows, or 7z in PATH)"
+    )
     sys.exit(1)
 
 
@@ -86,7 +113,10 @@ def find_inner_archive(folder):
         for f in sorted(files):
             lower = f.lower()
             full = os.path.join(root, f)
-            if any(lower.endswith(ext) for ext in [".7z", ".zip", ".rar", ".gz", ".bz2", ".xz", ".tar", ".tgz"]):
+            if any(
+                lower.endswith(ext)
+                for ext in [".7z", ".zip", ".rar", ".gz", ".bz2", ".xz", ".tar", ".tgz"]
+            ):
                 return full
     return None
 
@@ -95,9 +125,13 @@ def extract(archive, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     cmd = EXTRACTOR + ["x", f"-p{PASSWORD}", f"-o{output_dir}", "-y", archive]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    
+
     if result.returncode != 0:
-        error_msg = result.stderr.strip() or result.stdout.strip() or f"Exit code {result.returncode}"
+        error_msg = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"Exit code {result.returncode}"
+        )
         return False, error_msg
     return True, ""
 
@@ -112,7 +146,7 @@ def extract_recursive(archive, depth=0):
 
     success, error_details = extract(archive, out_dir)
     if not success:
-        single_line_err = error_details.replace('\n', ' | ')[:150]
+        single_line_err = error_details.replace("\n", " | ")[:150]
         safe_print(f"{indent}  FAILED to extract. Reason: {single_line_err}")
         return None, None
 
@@ -126,12 +160,14 @@ def extract_recursive(archive, depth=0):
     total_vid = count_videos(content_dir)
 
     direct_img = sum(
-        1 for f in os.listdir(content_dir)
+        1
+        for f in os.listdir(content_dir)
         if os.path.isfile(os.path.join(content_dir, f))
         and os.path.splitext(f)[1].lower() in IMAGE_EXTS
     )
     direct_vid = sum(
-        1 for f in os.listdir(content_dir)
+        1
+        for f in os.listdir(content_dir)
         if os.path.isfile(os.path.join(content_dir, f))
         and os.path.splitext(f)[1].lower() in VIDEO_EXTS
     )
@@ -143,10 +179,16 @@ def extract_recursive(archive, depth=0):
     if total_img >= 2 or total_vid >= 1:
         for entry in sorted(os.listdir(content_dir)):
             sub = os.path.join(content_dir, entry)
-            if os.path.isdir(sub) and (count_images(sub) >= 2 or count_videos(sub) >= 1):
-                safe_print(f"{indent}  Found media in {entry} ({count_images(sub)} images, {count_videos(sub)} videos)")
+            if os.path.isdir(sub) and (
+                count_images(sub) >= 2 or count_videos(sub) >= 1
+            ):
+                safe_print(
+                    f"{indent}  Found media in {entry} ({count_images(sub)} images, {count_videos(sub)} videos)"
+                )
                 return sub, entry
-        safe_print(f"{indent}  Only {direct_img} direct images, {direct_vid} direct videos ({total_img} img, {total_vid} vid total)")
+        safe_print(
+            f"{indent}  Only {direct_img} direct images, {direct_vid} direct videos ({total_img} img, {total_vid} vid total)"
+        )
         return content_dir, os.path.basename(content_dir)
 
     inner = find_inner_archive(content_dir)
@@ -169,7 +211,9 @@ def find_media_folder(folder):
         entries = [e for e in os.listdir(current) if not e.startswith(".")]
         if len(entries) == 1:
             candidate = os.path.join(current, entries[0])
-            if os.path.isdir(candidate) and (count_images(candidate) >= 2 or count_videos(candidate) >= 1):
+            if os.path.isdir(candidate) and (
+                count_images(candidate) >= 2 or count_videos(candidate) >= 1
+            ):
                 current = candidate
                 continue
         break
@@ -182,11 +226,11 @@ def delete_archive_files(archive):
         dir_path = os.path.dirname(archive)
         file_name = os.path.basename(archive)
         lower_name = file_name.lower()
-        
+
         if lower_name.endswith(".7z.001"):
             prefix = file_name[:-4]  # Everything matching 'filename.7z.'
             for f in os.listdir(dir_path):
-                if f.startswith(prefix) and f[len(prefix):].isdigit():
+                if f.startswith(prefix) and f[len(prefix) :].isdigit():
                     os.remove(os.path.join(dir_path, f))
         elif lower_name.endswith(".zip"):
             prefix = file_name[:-4]  # Pure filename base
@@ -194,14 +238,19 @@ def delete_archive_files(archive):
                 os.remove(archive)
             for f in os.listdir(dir_path):
                 f_lower = f.lower()
-                if f_lower.startswith(prefix.lower() + ".z") and f_lower[len(prefix)+2:].isdigit():
+                if (
+                    f_lower.startswith(prefix.lower() + ".z")
+                    and f_lower[len(prefix) + 2 :].isdigit()
+                ):
                     os.remove(os.path.join(dir_path, f))
         else:
             if os.path.exists(archive):
                 os.remove(archive)
         safe_print(f"  Deleted source archive: {file_name}")
     except Exception as e:
-        safe_print(f"  Warning: Could not delete source archive file(s) for {os.path.basename(archive)}: {e}")
+        safe_print(
+            f"  Warning: Could not delete source archive file(s) for {os.path.basename(archive)}: {e}"
+        )
 
 
 def handle_output_movement(final_dir, final_name, output_base):
@@ -218,13 +267,13 @@ def handle_output_movement(final_dir, final_name, output_base):
                 suffix = f"_{i+1}" if len(video_files) > 1 else ""
                 new_vid_name = f"{final_name}{suffix}{ext}"
                 dest_vid = os.path.join(output_base, new_vid_name)
-                
+
                 if os.path.exists(dest_vid):
                     if os.path.isdir(dest_vid):
                         shutil.rmtree(dest_vid)
                     else:
                         os.remove(dest_vid)
-                        
+
                 shutil.move(vid_path, dest_vid)
                 safe_print(f"  -> {dest_vid}")
         else:
@@ -234,7 +283,7 @@ def handle_output_movement(final_dir, final_name, output_base):
                     shutil.rmtree(dest)
                 else:
                     os.remove(dest)
-                    
+
             shutil.move(final_dir, dest)
             safe_print(f"  -> {dest}")
 
@@ -242,7 +291,7 @@ def handle_output_movement(final_dir, final_name, output_base):
 def process_archive(archive, output_base):
     safe_print(f"Processing archive: {os.path.basename(archive)}")
     temp_dir = archive + ".temp"
-    
+
     result_dir, result_name = extract_recursive(archive)
     if result_dir is None:
         if os.path.exists(temp_dir):
@@ -251,10 +300,10 @@ def process_archive(archive, output_base):
 
     final_dir, final_name = find_media_folder(result_dir)
     handle_output_movement(final_dir, final_name, output_base)
-    
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
-        
+
     # Successfully processed and moved; wipe out the source archive file(s)
     delete_archive_files(archive)
     safe_print("")
@@ -279,10 +328,10 @@ def process_folder(folder_path, output_base):
 
     final_dir, final_name = find_media_folder(result_dir)
     handle_output_movement(final_dir, final_name, output_base)
-    
+
     if os.path.exists(temp_dir):
         shutil.rmtree(temp_dir, ignore_errors=True)
-        
+
     # Wipe out the inner archive inside the folder now that it's uncompressed safely
     delete_archive_files(inner)
     safe_print("")
@@ -306,21 +355,29 @@ def main():
 
     if folder_mode:
         folders = sorted(
-            f for f in os.listdir(target)
-            if os.path.isdir(os.path.join(target, f)) and not f.startswith(".") and f != "Output"
+            f
+            for f in os.listdir(target)
+            if os.path.isdir(os.path.join(target, f))
+            and not f.startswith(".")
+            and f != "Output"
         )
         if not folders:
             safe_print("No subdirectories found.")
             return
-        safe_print(f"Found {len(folders)} folder(s) | Running with {MAX_WORKERS} workers.\n")
-        
+        safe_print(
+            f"Found {len(folders)} folder(s) | Running with {MAX_WORKERS} workers.\n"
+        )
+
         success = 0
         with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = [executor.submit(process_folder, os.path.join(target, name), output_dir) for name in folders]
+            futures = [
+                executor.submit(process_folder, os.path.join(target, name), output_dir)
+                for name in folders
+            ]
             for future in concurrent.futures.as_completed(futures):
                 if future.result():
                     success += 1
-                    
+
         safe_print(f"Done: {success}/{len(folders)} processed.")
         return
 
@@ -340,18 +397,25 @@ def main():
         if lower.endswith(".zip"):
             archives.append(full)
             continue
-        if any(lower.endswith(ext) for ext in [".gz", ".7z", ".rar", ".bz2", ".xz", ".tar", ".tgz", ".tbz2"]):
+        if any(
+            lower.endswith(ext)
+            for ext in [".gz", ".7z", ".rar", ".bz2", ".xz", ".tar", ".tgz", ".tbz2"]
+        ):
             archives.append(full)
 
     if not archives:
         safe_print("No archives found. Use --folders to scan subdirectories.")
         return
 
-    safe_print(f"Found {len(archives)} archive(s) | Running with {MAX_WORKERS} workers.\n")
-    
+    safe_print(
+        f"Found {len(archives)} archive(s) | Running with {MAX_WORKERS} workers.\n"
+    )
+
     success = 0
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(process_archive, arch, output_dir) for arch in archives]
+        futures = [
+            executor.submit(process_archive, arch, output_dir) for arch in archives
+        ]
         for future in concurrent.futures.as_completed(futures):
             if future.result():
                 success += 1
