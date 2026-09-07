@@ -10,6 +10,7 @@ Adult-content-related scripts (Beautyleg downloader/renamers, scrapers, etc.) li
 
 - **No comments in code.** Code should be self-documenting.
 - **Minimal dependencies.** Prefer stdlib. Only add dependencies when unavoidable.
+- **Media tasks use FFmpeg via subprocess.** Don't add Python media libraries (cv2, PIL, numpy) for decoding frames/audio; shell out to `ffmpeg`/`ffprobe` instead, and prefer read patterns that minimize bytes and seeks (see `sync_finder.py`, `scan_watermark.py`).
 - **Standalone scripts.** Each script is independently runnable (`python script.py`).
 - **No shebang.** Scripts are run via `python script.py` or `uv run script.py`, not executed directly.
 - **Cross-platform when practical.** macOS is primary, but avoid hardcoding paths when possible.

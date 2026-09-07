@@ -219,6 +219,40 @@ python video_extractor.py /some/dir
 
 ---
 
+### scan_watermark.py
+
+Scans a folder of videos for a static bright watermark in the top-right corner and lists the watermarked ones.
+
+**What it does:**
+
+- Samples a few keyframes per video via FFmpeg — never reads whole files.
+- Takes a per-pixel minimum composite over the sampled frames, so the static watermark survives while varying backgrounds cancel out.
+- Applies a white top-hat filter (keeps thin bright strokes like text, ignores flat bright areas like walls/sky) and flags videos whose stroke-pixel ratio exceeds a threshold.
+- Built for network/cloud drives (e.g. CloudDrive2 over SMB): reads are sequential with minimal seeks.
+
+**Sampling modes:**
+
+- `--first-frame` — reads only the first keyframe (~0.4MB per video). Cheapest pass for cloud drives; recheck "clean" files with a wider pass.
+- default `--span 25` — one sequential read of the first 25s, decoding only keyframes.
+- `--span 0` — seeks across the full duration (most robust, most bandwidth).
+
+**Usage:**
+
+```bash
+# cheap first pass over a cloud drive
+python scan_watermark.py /Volumes/cloud/videos --first-frame --print-clean
+
+# follow-up pass with wider sampling
+python scan_watermark.py /Volumes/cloud/videos --print-clean
+
+# verbose: show per-video box size and frame count
+python scan_watermark.py /Volumes/cloud/videos -v
+```
+
+The watermark region defaults to frame fractions `0.87,0.04,0.97,0.105` (measured on 4K Beautyleg rips); override with `--box X0,Y0,X1,Y1` if the mark sits elsewhere. `--save-crops DIR` dumps each video's composite crop as a PGM for visual verification.
+
+---
+
 ## Requirements
 
 Most scripts are stdlib-only. `sync_finder.py` additionally needs FFmpeg plus numpy and scipy — use the included venv:
@@ -226,3 +260,5 @@ Most scripts are stdlib-only. `sync_finder.py` additionally needs FFmpeg plus nu
 ```bash
 .venv/bin/python sync_finder.py ...
 ```
+
+`scan_watermark.py` needs FFmpeg and ffprobe on PATH but is otherwise stdlib-only.
