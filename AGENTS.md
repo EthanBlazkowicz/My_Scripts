@@ -2,6 +2,10 @@
 
 This repo is a collection of standalone Python utility scripts.
 
+## Companion repo
+
+Adult-content-related scripts (Beautyleg downloader/renamers, scrapers, etc.) live in `~/Code/Naughty_Scripts`, not here. Don't recreate them in this repo or document them in this README.
+
 ## Conventions
 
 - **No comments in code.** Code should be self-documenting.
@@ -13,9 +17,9 @@ This repo is a collection of standalone Python utility scripts.
 ## Running scripts
 
 ```bash
-uv run ~/Code/My-Scripts/script.py [args]
+uv run ~/Code/My_Scripts/script.py [args]
 # or
-python ~/Code/My-Scripts/script.py [args]
+python ~/Code/My_Scripts/script.py [args]
 ```
 
 ## Testing

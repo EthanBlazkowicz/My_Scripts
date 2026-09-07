@@ -2,6 +2,8 @@
 
 A collection of standalone Python scripts for everyday automation tasks.
 
+Companion repo: `~/Code/Naughty_Scripts` — adult-content-related scripts (Beautyleg downloader/renamers, etc.) live there.
+
 ## Scripts
 
 ### organize_episodes.py
@@ -52,27 +54,6 @@ Enter a URL when prompted. The resolved link will be printed and copied to your 
 
 ---
 
-### rename_c4s.py
-
-Renames video files based on Clips4sale search results.
-
-**What it does:**
-
-- Parses original filenames to extract a search query and resolution.
-- Uses DuckDuckGo HTML search to find the matching C4S clip ID.
-- Automatically prepends the clip ID to the filename.
-- Remembers the last used directory and search URL via `~/.rename_c4s_config.json`.
-- Safely handles duplicate files by prefixing `0Duplicate `.
-
-**Usage:**
-
-```bash
-python rename_c4s.py
-python rename_c4s.py --dir /path/to/videos --url "https://www..." --dry-run
-```
-
----
-
 ### find_duplicates.py
 
 Quickly finds duplicate files on network drives using partial hashing.
@@ -116,63 +97,6 @@ python remove_resolutions.py /path/to/videos --dry-run
 
 ---
 
----
-
-### decompress.py
-
-Recursively extracts split archives (`.7z.001`, `.z01`+`.zip`, `.gz`, `.rar`, etc.) until it finds the folder containing images.
-
-**What it does:**
-
-- Detects OS: uses Keka on macOS, 7-Zip on Windows, or `7z` from PATH as fallback.
-- Archives may be nested — an outer `.gz` might contain `.7z.001`+`.7z.002`, which in turn contains the images.
-- Extracts recursively until a folder with 2+ images is found.
-- Moves the innermost image folder into `Output/`, named after that folder (not the archive).
-- Cleans up temp `.temp` directories after each archive.
-
-**Usage:**
-
-```bash
-# Target archive files in current directory
-python decompress.py
-
-# Target archive files in a specific directory
-python decompress.py /path/to/files
-
-# Target subdirectories (each containing archives)
-python decompress.py --folders
-python decompress.py --folders /path/to/dirs
-```
-
-**Password:**
-The password is hardcoded in the script (`PASSWORD` variable). Update it if needed.
-
----
-
-### rename.py
-
-Renames Xiuren-related folders into a standardized `[Xiuren秀人网]YYYY.MM.DD NO.XXXX ...` format.
-
-**What it does:**
-
-- Normalizes tag variants (`[XiuRen秀人网]`, `[XIUREN秀人网]`) to `[Xiuren秀人网]`.
-- Removes stray spaces after the tag and before size brackets.
-- Normalizes `No.` to `NO.`.
-- Strips XR code prefixes (e.g., `XR20200228N02016`).
-- **Pure number folders** (e.g. `2334`) — looks up the number in `~/Downloads/the_list.txt` and generates the full name.
-- **XR+number folders** (e.g. `XR1739`) — same lookup, extracts date from the entry, formats with `NO.{num}`.
-
-**Usage:**
-
-```bash
-python rename.py
-python rename.py /path/to/folders
-```
-
-**Lookup file:** `~/Downloads/the_list.txt` — one name per line, blank lines ignored.
-
----
-
 ### shift_srt.py
 
 Shifts `.srt` subtitle timestamps by a specified offset to sync web-rip subs with blu-ray video.
@@ -201,19 +125,104 @@ python shift_srt.py input.srt 0.750 -i
 
 ---
 
+### sync_finder.py
+
+Batch-computes audio timeline offsets between Blu-ray and streaming versions of episodes over SMB/Samba, for subtitle syncing.
+
+**What it does:**
+
+- Streams the first N seconds of audio from each file via FFmpeg (no temp files, minimal network reads).
+- Cross-correlates the waveforms (numpy/scipy) to find the exact offset.
+- Writes offsets to a report file, one per episode pair, for use with `shift_srt.py`.
+- Matches episodes across two folders via `S01E01` / `1x01` style identifiers.
+
+**Requirements:** FFmpeg on PATH; run with the included venv (numpy, scipy).
+
+**Usage:**
+
+```bash
+.venv/bin/python sync_finder.py -b /bluray/season1 -s /streaming/season1 -o offsets.txt
+```
+
+---
+
+### find_missing_numbers.py
+
+Finds gaps in `No.XXX` numbering across files/folders in a directory.
+
+**What it does:**
+
+- Scans a directory for names containing `No.###` (case-insensitive).
+- Reports the covered range, items without a number, and every missing number in between.
+
+**Usage:**
+
+```bash
+python find_missing_numbers.py /path/to/folders
+```
+
+---
+
+### find_small_photo_folders.py
+
+Flags folders that contain suspiciously small photos (likely broken/thumbnail-only downloads).
+
+**What it does:**
+
+- Recursively walks a directory.
+- Prints the folder name if it contains any image between 40KB and 100KB.
+- Progress counter goes to stderr.
+
+**Usage:**
+
+```bash
+python find_small_photo_folders.py /path/to/photo/library
+```
+
+---
+
+### move_folders.py
+
+Moves folders named in a list file from one directory to another.
+
+**What it does:**
+
+- Reads a list file with one folder name per line (default: `~/Downloads/moving.txt`).
+- Moves each matching folder from the source to the destination.
+- Skips folders that already exist in the destination; reports listed names not found.
+
+**Usage:**
+
+```bash
+python move_folders.py /source /destination
+python move_folders.py /source /destination --list ~/my_list.txt
+```
+
+---
+
+### video_extractor.py
+
+Flattens videos out of per-folder subdirectories into a single `Output/` folder.
+
+**What it does:**
+
+- Scans every subdirectory of the target directory in parallel.
+- Moves each video found (recursively) into `Output/`, named after its folder.
+- Multiple videos in one folder get `_2`, `_3` suffixes.
+
+**Usage:**
+
+```bash
+python video_extractor.py            # current directory
+python video_extractor.py /some/dir
+```
+
+---
+
 ## Requirements
 
-```bash
-pip install requests pyperclip beautifulsoup4
-```
-
-Or use the included virtual environment:
+Most scripts are stdlib-only. `sync_finder.py` additionally needs FFmpeg plus numpy and scipy — use the included venv:
 
 ```bash
-.venv\Scripts\activate
+.venv/bin/python sync_finder.py ...
 ```
-
-## Notes
-
-- Scripts use ANSI color codes for terminal output
-- Both scripts handle Ctrl+C gracefully
