@@ -7,10 +7,19 @@ DEFAULT_LIST = Path("/Users/ethanblazkowicz/Downloads/moving.txt")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Move folders named in a list file from one directory to another")
-    parser.add_argument("source", type=Path, help="Directory containing the folders to move")
+    parser = argparse.ArgumentParser(
+        description="Move folders named in a list file from one directory to another"
+    )
+    parser.add_argument(
+        "source", type=Path, help="Directory containing the folders to move"
+    )
     parser.add_argument("destination", type=Path, help="Directory to move folders into")
-    parser.add_argument("--list", type=Path, default=DEFAULT_LIST, help=f"Text file with one folder name per line (default: {DEFAULT_LIST})")
+    parser.add_argument(
+        "--list",
+        type=Path,
+        default=DEFAULT_LIST,
+        help=f"Text file with one folder name per line (default: {DEFAULT_LIST})",
+    )
     args = parser.parse_args()
 
     if not args.source.is_dir():
@@ -18,7 +27,11 @@ def main():
     if not args.list.is_file():
         sys.exit(f"Not a file: {args.list}")
 
-    names = {line.strip() for line in args.list.read_text(encoding="utf-8").splitlines() if line.strip()}
+    names = {
+        line.strip()
+        for line in args.list.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
     if not names:
         sys.exit("List file is empty.")
 

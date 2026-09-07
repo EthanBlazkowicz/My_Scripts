@@ -7,8 +7,12 @@ NUM_RE = re.compile(r"No\.(\d+)", re.IGNORECASE)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Find missing issue numbers in file/folder names like '... No.001 ...'")
-    parser.add_argument("target", type=Path, help="Directory containing the numbered folders/files")
+    parser = argparse.ArgumentParser(
+        description="Find missing issue numbers in file/folder names like '... No.001 ...'"
+    )
+    parser.add_argument(
+        "target", type=Path, help="Directory containing the numbered folders/files"
+    )
     args = parser.parse_args()
 
     if not args.target.is_dir():
