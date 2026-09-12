@@ -8,7 +8,7 @@ DEFAULT_LIST = Path("/Users/ethanblazkowicz/Downloads/moving.txt")
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Move folders named in a list file from one directory to another"
+        description="Move folders or files named in a list file from one directory to another"
     )
     parser.add_argument(
         "source", type=Path, help="Directory containing the folders to move"
@@ -35,22 +35,22 @@ def main():
     if not names:
         sys.exit("List file is empty.")
 
-    folders = [e for e in args.source.iterdir() if e.is_dir() and e.name in names]
-    found = {e.name for e in folders}
+    entries = [e for e in args.source.iterdir() if e.name in names]
+    found = {e.name for e in entries}
 
     args.destination.mkdir(parents=True, exist_ok=True)
 
     moved = 0
     skipped = []
-    for folder in folders:
-        target = args.destination / folder.name
+    for entry in entries:
+        target = args.destination / entry.name
         if target.exists():
-            skipped.append(folder.name)
+            skipped.append(entry.name)
             continue
-        shutil.move(folder, target)
+        shutil.move(entry, target)
         moved += 1
 
-    print(f"Moved {moved} of {len(names)} listed folders to {args.destination}")
+    print(f"Moved {moved} of {len(names)} listed entries to {args.destination}")
 
     not_found = names - found
     if not_found:

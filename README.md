@@ -183,13 +183,13 @@ python find_small_photo_folders.py /path/to/photo/library
 
 ### move_folders.py
 
-Moves folders named in a list file from one directory to another.
+Moves folders or files named in a list file from one directory to another.
 
 **What it does:**
 
-- Reads a list file with one folder name per line (default: `~/Downloads/moving.txt`).
-- Moves each matching folder from the source to the destination.
-- Skips folders that already exist in the destination; reports listed names not found.
+- Reads a list file with one name per line (default: `~/Downloads/moving.txt`).
+- Moves each matching folder or file from the source to the destination.
+- Skips names that already exist in the destination; reports listed names not found.
 
 **Usage:**
 
