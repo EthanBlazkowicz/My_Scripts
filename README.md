@@ -146,6 +146,58 @@ Batch-computes audio timeline offsets between Blu-ray and streaming versions of 
 
 ---
 
+### fix_killing_subs.py
+
+Fixes The Killing SRT subtitle timelines using the Blu-ray `.ass` subtitles (人人/YYeTs dual-language) as reference.
+
+**What it does:**
+
+- The Disney+ SRTs drift against the Blu-ray release because the Blu-ray inserts black-screen segments; the drift grows in discrete steps at each insertion.
+- Text-matches every SRT entry to an ASS dialogue line: exact matches on normalized Chinese text (repeated lines disambiguated by time consistency, coincidental matches rejected), then fuzzy matching constrained to the offsets bracketing each anchor.
+- Matched lines copy the ASS times verbatim; unmatched lines (e.g. cold opens missing from the Blu-ray) take the nearest matched neighbour's offset.
+- Re-anchors isolated timing spikes caused by overlapping dialogue ordered differently between translations.
+- Only timestamps are rewritten; text is untouched. Originals are backed up before in-place overwrite.
+
+**Usage:**
+
+```bash
+# dry-run report for season 1, episodes 2-13
+python fix_killing_subs.py --season 1 --dry-run
+
+# fix all episodes of season 2 (episode 1 included)
+python fix_killing_subs.py --season 2 --all
+
+# custom folders
+python fix_killing_subs.py --season 2 --downloads /path/to/root --backup-dir /path/to/backups
+```
+
+Expects `--downloads` (default `~/Downloads`) to contain `Season NN/` folders with the SRTs plus the matching `谋杀 第X季...` reference folders; discovers the `.ass` files by `S01.E02.`-style name patterns (UTF-16 and UTF-8 ASS both supported).
+
+---
+
+### align_rhythm.py
+
+Experimental companion to `fix_killing_subs.py`: aligns SRT to ASS timelines by line pacing alone, with no text matching.
+
+**What it does:**
+
+- Both subtitle tracks pace the same scenes, so elapsed time between consecutive lines is a translation-independent fingerprint.
+- A global DP alignment (match / skip in either file; match cost = disagreement in elapsed time between consecutive pairs) finds the monotonic correspondence between the two event lists.
+- The offset along the alignment is piecewise constant — constant within a scene, stepping at every black-screen insertion. Steps are detected with a sliding median and reported as segments.
+- Useful to cross-check the cut structure found by `fix_killing_subs.py`. Alone it is less reliable: pacing-only alignment can slip onto parallel paths in quiet stretches, producing phantom segments, and steps smaller than ~0.5s can be missed.
+
+**Usage:**
+
+```bash
+# report the offset segment structure of a season
+python align_rhythm.py --season 2
+
+# apply the segment offsets to the SRTs (optional backup dir)
+python align_rhythm.py --season 2 --write --backup-dir /path/to/backups
+```
+
+---
+
 ### find_missing_numbers.py
 
 Finds gaps in `No.XXX` numbering across files/folders in a directory.
