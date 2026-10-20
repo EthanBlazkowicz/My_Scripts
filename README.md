@@ -25,7 +25,7 @@ python organize_episodes.py
 You'll be prompted for:
 
 1. Show title (used in the renamed files)
-2. Target directory (or press Enter for current directory)
+2. Target directory (or press Enter for current directory). Quoted paths are accepted, so pasting `"/Volumes/Some Folder"` from Finder or a terminal works as-is.
 
 **Supported formats:**
 

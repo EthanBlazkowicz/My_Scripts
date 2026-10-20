@@ -2,6 +2,11 @@ import os
 import re
 from pathlib import Path
 
+try:
+    import readline
+except ImportError:
+    pass
+
 
 # ANSI color codes for terminal output
 class Colors:
@@ -14,12 +19,22 @@ class Colors:
     RESET = "\033[0m"
 
 
+def strip_wrapping_quotes(text: str) -> str:
+    text = text.strip()
+    for quote in ('"', "'"):
+        if len(text) >= 2 and text.startswith(quote) and text.endswith(quote):
+            return text[1:-1].strip()
+    return text
+
+
 def organize_tv_show_episodes():
     # Ask for inputs after the script runs
     show_title = input("Enter the Show Title: ").strip()
-    target_directory = input(
-        "Enter the Target Directory (leave blank for current directory '.'): "
-    ).strip()
+    target_directory = strip_wrapping_quotes(
+        input(
+            "Enter the Target Directory (leave blank for current directory '.'): "
+        )
+    )
 
     if not target_directory:
         target_directory = "."
